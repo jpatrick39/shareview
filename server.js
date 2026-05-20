@@ -179,13 +179,15 @@ app.get('/api/assignments', (_req, res) => {
   res.json({ ok: true, assignments, devices: knownDevices });
 });
 
-app.post('/api/assignments', requireAuth, (req, res) => {
-  const assignment = normalizeAssignment(req.body || {});
-  if (!assignment) return res.status(400).json({ ok: false, error: 'deviceId is required' });
-  assignments = assignments.filter(a => a.deviceId !== assignment.deviceId);
-  assignments.unshift(assignment);
-  res.status(201).json({ ok: true, assignment });
-});
+app.post("/api/readings", (req, res) => {
+  const body = req.body || {};
+
+  console.log("INCOMING WATCH BODY:", JSON.stringify(body, null, 2));
+
+  const reading = addReadingFromBody(body);
+
+  res.json({ ok: true, reading });
+});;
 
 app.delete('/api/assignments/:deviceId', requireAuth, (req, res) => {
   const deviceId = String(req.params.deviceId || '');
