@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShareView Health Command Center</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">SV</div>
+        <div>
+          <div class="brand-name">ShareView</div>
+          <div class="brand-subtitle">Health Command</div>
+        </div>
+      </div>
+      <nav>
+        <button class="nav-item active" data-view="command">Command Center</button>
+        <button class="nav-item" data-view="patients">Patients</button>
+        <button class="nav-item" data-view="ecg">ECG Review</button>
+        <button class="nav-item" data-view="devices">Devices</button>
+        <button class="nav-item" data-view="assignments">Assign Watches</button>
+        <button class="nav-item" data-view="settings">Settings</button>
+      </nav>
+      <div class="disclaimer">
+        <strong>Clinical note</strong>
+        <span>Blood pressure values are estimation only until clinically validated.</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="viewTitle">Clinician Command Center</h1>
+          <p id="viewSubtitle">Live watch vitals, ECG snapshots, and patient alerts.</p>
+        </div>
+        <div class="top-actions">
+          <button id="demoBtn">Add demo reading</button>
+          <button id="refreshBtn">Refresh</button>
+        </div>
+      </header>
+
+      <section class="metrics-grid">
+        <article class="metric-card"><span class="metric-label">Active Patients</span><strong id="activePatients">0</strong></article>
+        <article class="metric-card danger"><span class="metric-label">Open Alerts</span><strong id="openAlerts">0</strong></article>
+        <article class="metric-card"><span class="metric-label">ECG Captured</span><strong id="ecgCaptured">0</strong></article>
+        <article class="metric-card"><span class="metric-label">Connected Devices</span><strong id="connectedDevices">0</strong></article>
+      </section>
+
+      <section id="view-command" class="view active">
+        <section class="content-grid">
+          <section class="panel wide">
+            <div class="panel-header">
+              <div><h2>Patient Watch Feed</h2><p>Most recent reading per patient</p></div>
+              <input id="searchInput" type="search" placeholder="Search patient or room" />
+            </div>
+            <div id="patientList" class="patient-list"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-header"><div><h2>Alert Queue</h2><p>Estimated vitals needing review</p></div></div>
+            <div id="alertList" class="alert-list"></div>
+          </section>
+        </section>
+      </section>
+
+      <section id="view-patients" class="view">
+        <section class="panel">
+          <div class="panel-header"><div><h2>Patients</h2><p>All patients with latest watch readings</p></div></div>
+          <div id="patientsTable" class="table-list"></div>
+        </section>
+      </section>
+
+      <section id="view-ecg" class="view">
+        <section class="content-grid ecg-layout">
+          <section class="panel">
+            <div class="panel-header"><div><h2>ECG Queue</h2><p>Select a reading to review waveform detail</p></div></div>
+            <div id="ecgQueue" class="ecg-queue"></div>
+          </section>
+          <section class="panel wide">
+            <div class="panel-header"><div><h2>ECG Viewer</h2><p id="ecgViewerSubtitle">Choose a captured ECG</p></div></div>
+            <div class="ecg-viewer-card">
+              <div id="ecgViewerMeta" class="viewer-meta">No ECG selected.</div>
+              <canvas id="ecgViewerCanvas" class="ecg-large"></canvas>
+              <div id="ecgViewerStats" class="ecg-stats"></div>
+            </div>
+          </section>
+        </section>
+      </section>
+
+      <section id="view-devices" class="view">
+        <section class="panel">
+          <div class="panel-header"><div><h2>Devices</h2><p>Watch connection and last-upload status</p></div></div>
+          <div id="devicesTable" class="table-list"></div>
+        </section>
+      </section>
+
+<section id="view-assignments" class="view">
+  <section class="content-grid">
+    <section class="panel">
+      <div class="panel-header"><div><h2>Assign Watch to Patient</h2><p>Map a unique watch/device ID to a patient, room, and bed.</p></div></div>
+      <form id="assignmentForm" class="assignment-form">
+        <label>Device ID<input id="assignDeviceId" required placeholder="watch-002" /></label>
+        <label>Patient ID<input id="assignPatientId" required placeholder="P-1002" /></label>
+        <label>Patient Name<input id="assignPatientName" placeholder="Patient name" /></label>
+        <label>Room<input id="assignRoom" placeholder="Room 216" /></label>
+        <label>Bed<input id="assignBed" placeholder="Bed 1" /></label>
+        <button type="submit">Save Assignment</button>
+      </form>
+      <p class="subtle" id="assignmentStatus"></p>
+    </section>
+    <section class="panel wide">
+      <div class="panel-header"><div><h2>Current Assignments</h2><p>Incoming readings are assigned based on device ID.</p></div></div>
+      <div id="assignmentsTable" class="table-list"></div>
+    </section>
+  </section>
+</section>
+
+      <section id="view-settings" class="view">
+        <section class="panel settings-panel">
+          <div class="panel-header"><div><h2>Settings</h2><p>Dashboard display and ingest details</p></div></div>
+          <div class="settings-grid">
+            <div class="setting-card"><strong>Ingest endpoint</strong><code>POST /api/readings</code></div>
+            <div class="setting-card"><strong>Refresh interval</strong><span>5 seconds</span></div>
+            <div class="setting-card"><strong>BP notice</strong><span>Estimated only until clinically validated.</span></div>
+            <div class="setting-card"><strong>ECG viewer</strong><span>Displays uploaded preview/strip values from watch.</span></div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
