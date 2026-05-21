@@ -16,6 +16,7 @@ app.use(express.json({ limit: '4mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const now = Date.now();
+
 let assignments = [
   {
     deviceId: 'watch-001',
@@ -40,10 +41,14 @@ let readings = [
     systolic: 122,
     diastolic: 78,
     heartRateBpm: 72,
+    spo2Percent: 98,
+    skinTemperatureC: 36.7,
     pttMs: 118.4,
     confidenceLabel: 'Estimate only',
     ecgStatus: 'Captured',
     ecgPreview: generateEcgPreview(90),
+    ppgPreview: generatePpgPreview(90),
+    ecg: { rhythmLabel: 'Captured', sampleCount: 90 },
     note: 'BP is estimation only',
     source: 'Galaxy Watch',
     watchModel: 'Galaxy Watch 7',
@@ -68,25 +73,42 @@ function generateEcgPreview(count = 90) {
   });
 }
 
-function classifyReading(r) {
-  const alerts = [];
-  if (r.systolic >= 140 || r.diastolic >= 90) alerts.push('High estimated BP');
-  if (r.systolic > 0 && (r.systolic <= 90 || r.diastolic <= 60)) alerts.push('Low estimated BP');
-  if (r.heartRateBpm >= 110) alerts.push('High HR');
-  if (r.heartRateBpm > 0 && r.heartRateBpm <= 50) alerts.push('Low HR');
-  if (!r.calibrated) alerts.push('Calibration needed');
-  if (r.ecgStatus === 'Pending') alerts.push('ECG pending');
-  return alerts;
+function generatePpgPreview(count = 90) {
+  return Array.from({ length: count }, (_, i) => {
+    const wave = 520 + Math.sin(i / 8) * 38 + Math.sin(i / 2) * 4;
+    return Number(wave.toFixed(2));
+  });
+}
+
+function parseCsv(csv) {
+  if (typeof csv !== 'string' || !csv.trim()) return [];
+  return csv.split(',').map(Number).filter(Number.isFinite).slice(0, 480);
 }
 
 function parseEcgPreview(body) {
   if (Array.isArray(body.ecgPreview)) return body.ecgPreview.slice(0, 480).map(Number).filter(Number.isFinite);
   if (Array.isArray(body.ecg?.preview)) return body.ecg.preview.slice(0, 480).map(Number).filter(Number.isFinite);
   const csv = body.ecg?.stripPreviewCsv || body.stripPreviewCsv || body.ecgStripPreviewCsv;
-  if (typeof csv === 'string' && csv.trim()) {
-    return csv.split(',').map(Number).filter(Number.isFinite).slice(0, 480);
-  }
+  if (typeof csv === 'string' && csv.trim()) return parseCsv(csv);
   return generateEcgPreview(90);
+}
+
+function parsePpgPreview(body) {
+  if (Array.isArray(body.ppgPreview)) return body.ppgPreview.slice(0, 480).map(Number).filter(Number.isFinite);
+  if (Array.isArray(body.ppg?.preview)) return body.ppg.preview.slice(0, 480).map(Number).filter(Number.isFinite);
+  return parseCsv(body.ppgPreviewCsv || body.ppg?.stripPreviewCsv || '');
+}
+
+function classifyReading(r) {
+  const alerts = [];
+  if (r.systolic >= 140 || r.diastolic >= 90) alerts.push('High estimated BP');
+  if (r.systolic > 0 && (r.systolic <= 90 || r.diastolic <= 60)) alerts.push('Low estimated BP');
+  if (r.heartRateBpm >= 110) alerts.push('High HR');
+  if (r.heartRateBpm > 0 && r.heartRateBpm <= 50) alerts.push('Low HR');
+  if (r.spo2Percent > 0 && r.spo2Percent < 92) alerts.push('Low SpO₂');
+  if (!r.calibrated) alerts.push('Calibration needed');
+  if (r.ecgStatus === 'Pending') alerts.push('ECG pending');
+  return alerts;
 }
 
 function findAssignment(deviceId) {
@@ -114,10 +136,14 @@ function normalizeReading(body) {
   const deviceId = String(body.deviceId || body.watchId || 'unknown-device');
   const assignment = findAssignment(deviceId);
   const assignedRoom = assignment ? [assignment.room, assignment.bed].filter(Boolean).join(' • ') : null;
+
   const systolic = Number(body.systolic ?? body.systolicEstimate ?? bp.systolic ?? 0);
   const diastolic = Number(body.diastolic ?? body.diastolicEstimate ?? bp.diastolic ?? 0);
   const heartRateBpm = Number(body.heartRateBpm ?? body.heartRate ?? body.hr ?? body.pulse ?? vitals.heartRateBpm ?? bp.pulse ?? 0);
+  const spo2Percent = Number(body.spo2Percent ?? body.spo2 ?? vitals.spo2Percent ?? 0);
+  const skinTemperatureC = Number(body.skinTemperatureC ?? vitals.skinTemperatureC ?? 0);
   const ecgPreview = parseEcgPreview(body);
+  const ppgPreview = parsePpgPreview(body);
 
   return {
     id: crypto.randomUUID(),
@@ -130,10 +156,13 @@ function normalizeReading(body) {
     systolic,
     diastolic,
     heartRateBpm,
+    spo2Percent,
+    skinTemperatureC,
     pttMs: Number(body.pttMs || 0),
     confidenceLabel: String(body.confidenceLabel || body.confidence || 'Estimate only'),
     ecgStatus: String(body.ecgStatus || (body.ecg ? 'Captured' : 'Captured')),
     ecgPreview,
+    ppgPreview,
     ecg: body.ecg || { rhythmLabel: body.ecgRhythm || 'Captured', sampleCount: ecgPreview.length },
     note: String(body.note || 'BP is estimation only'),
     source: String(body.source || 'Galaxy Watch'),
@@ -159,6 +188,7 @@ app.get('/api/assignments', (_req, res) => {
     const key = r.deviceId || r.watchId || 'unknown-device';
     if (!latestByDevice.has(key)) latestByDevice.set(key, r);
   });
+
   const knownDevices = Array.from(new Set([
     ...assignments.map(a => a.deviceId),
     ...readings.map(r => r.deviceId || r.watchId).filter(Boolean)
@@ -172,22 +202,22 @@ app.get('/api/assignments', (_req, res) => {
         capturedAtEpochMs: latest.capturedAtEpochMs,
         systolic: latest.systolic,
         diastolic: latest.diastolic,
-        heartRateBpm: latest.heartRateBpm
+        heartRateBpm: latest.heartRateBpm,
+        spo2Percent: latest.spo2Percent
       } : null
     };
   });
+
   res.json({ ok: true, assignments, devices: knownDevices });
 });
 
-app.post("/api/readings", (req, res) => {
-  const body = req.body || {};
-
-  console.log("INCOMING WATCH BODY:", JSON.stringify(body, null, 2));
-
-  const reading = addReadingFromBody(body);
-
-  res.json({ ok: true, reading });
-});;
+app.post('/api/assignments', requireAuth, (req, res) => {
+  const assignment = normalizeAssignment(req.body || {});
+  if (!assignment) return res.status(400).json({ ok: false, error: 'deviceId is required' });
+  assignments = assignments.filter(a => a.deviceId !== assignment.deviceId);
+  assignments.unshift(assignment);
+  res.status(201).json({ ok: true, assignment });
+});
 
 app.delete('/api/assignments/:deviceId', requireAuth, (req, res) => {
   const deviceId = String(req.params.deviceId || '');
@@ -205,11 +235,13 @@ app.get('/api/readings', (_req, res) => {
 
 app.post('/api/readings', requireAuth, (req, res) => {
   console.log('INCOMING WATCH BODY:', JSON.stringify(req.body, null, 2));
-  res.status(201).json({ ok: true, reading: addReadingFromBody(req.body) });
+  const reading = addReadingFromBody(req.body || {});
+  res.status(201).json({ ok: true, reading });
 });
 
 app.post('/api/ingest/watch-reading', requireAuth, (req, res) => {
-  res.status(201).json({ ok: true, reading: addReadingFromBody(req.body) });
+  const reading = addReadingFromBody(req.body || {});
+  res.status(201).json({ ok: true, reading });
 });
 
 app.post('/api/demo-reading', (_req, res) => {
@@ -223,6 +255,8 @@ app.post('/api/demo-reading', (_req, res) => {
     systolic: 112 + Math.round(Math.random() * 42),
     diastolic: 70 + Math.round(Math.random() * 24),
     heartRateBpm: 62 + Math.round(Math.random() * 38),
+    spo2Percent: 95 + Math.round(Math.random() * 4),
+    ppgPreviewCsv: generatePpgPreview(90).join(','),
     ecgStatus: 'Captured',
     note: 'Demo reading'
   });

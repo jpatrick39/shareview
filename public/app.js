@@ -29,9 +29,6 @@ const els = {
   refreshBtn: document.getElementById('refreshBtn'),
   demoBtn: document.getElementById('demoBtn'),
   searchInput: document.getElementById('searchInput')
-  spo2Percent: Number(body.spo2Percent ?? body.spo2 ?? body.vitals?.spo2Percent ?? 0),
-  ppgPreview: parseCsv(body.ppgPreviewCsv || body.ppg?.stripPreviewCsv || ""),
-  skinTemperatureC: Number(body.skinTemperatureC ?? body.vitals?.skinTemperatureC ?? 0),
 };
 
 const viewCopy = {
